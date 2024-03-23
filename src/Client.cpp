@@ -1,15 +1,24 @@
 #include "../include/Client.h"
 #include <arpa/inet.h>
+#include <fstream>
+#include <iostream>
 #include <netinet/in.h>
+#include <sstream>
+#include <string>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
-Client::Client(const std::string &serverAdress, int port)
-    : m_serverAddress(serverAdress), m_port(port), m_clientSocket(0) {}
+const std::string EOF_MARKER = "##EOF##";
+
+Client::Client(const std::string &serverAdress)
+    : m_serverAddress(serverAdress), m_port(0), m_clientSocket(0) {}
 
 Client::~Client() { this->closeConn(); }
 
-bool Client::setupConn() {
+bool Client::setupConn(int port) {
+  this->m_port = port;
+
   // Create socket
   m_clientSocket = socket(AF_INET, SOCK_STREAM, 0);
   if (m_clientSocket == -1) {
@@ -34,12 +43,46 @@ bool Client::setupConn() {
     return false;
   }
 
+  this->m_isConnected = true;
   return true;
+}
+
+bool Client::isConnected() { return this->m_isConnected; }
+
+void Client::sendFile(const fs::path &filePath) {
+  // Open the file
+  std::ifstream file(filePath, std::ios::binary);
+  if (!file) {
+    std::cerr << "Error: Failed to open file: " << filePath << std::endl;
+    return;
+  }
+
+  // Read file contents into buffer
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  std::string fileData = buffer.str();
+
+  // Construct message with filename and file data
+  std::ostringstream message;
+  message << filePath.filename().string() << '\n';
+  message << fileData << EOF_MARKER;
+
+  // Send message to the server
+  ssize_t bytesSent = send(this->m_clientSocket, message.str().c_str(),
+                           message.str().size(), 0);
+  if (bytesSent == -1) {
+    std::cerr << "Error: Failed to send file\n";
+    return;
+  }
+
+  file.close();
+  std::cout << "File Sent Successfully\n";
 }
 
 void Client::closeConn() {
   if (m_clientSocket != -1) {
     close(m_clientSocket);
-    m_clientSocket = -1;
+    this->m_clientSocket = -1;
+    this->m_isConnected = false;
   }
 }

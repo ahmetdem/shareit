@@ -1,6 +1,11 @@
 #include "../include/Server.h"
+#include <fstream>
+#include <iostream>
 #include <netinet/in.h>
+#include <sstream>
+#include <string>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 Server::Server(const int port) : m_port(port), m_serverSocket(-1) {}
@@ -60,12 +65,58 @@ bool Server::acceptConn() {
   }
 
   // Handle client connection in a separate thread or process
-/*   this->handleClient(clientSocket); */
+  this->handleClient(clientSocket);
 
   return true;
 }
 
-// void Server::receiveFile() {}
-// void Server::saveFile() {}
+void Server::receiveFile(int clientSocket) {
+  const int bufferSize = 1024; // Buffer size for receiving data
+  char buffer[bufferSize];
 
-// void Server::handleClient(int clientSocket) {}
+  // Receive file data in a loop, handling potential partial reads
+  std::string fileData;
+  while (true) {
+    ssize_t bytesRead = recv(clientSocket, buffer, bufferSize, 0);
+
+    if (bytesRead == 0) {
+
+      if (fileData.find("EOF") != std::string::npos) {
+        fileData.erase(fileData.find("EOF"), 3); // Remove "EOF" marker
+        break;
+      } else {
+        std::cerr
+            << "Warning: Unexpected connection closure without EOF marker\n";
+        break;
+      }
+    } else if (bytesRead < 0) {
+      std::cerr << "Error: Failed to receive data\n";
+      return;
+    }
+
+    fileData += std::string(buffer, bytesRead);
+  }
+
+  // Extract filename from the beginning of the file data
+  std::string filename = fileData.substr(0, fileData.find('\n'));
+  fileData = fileData.substr(filename.length() + 1); // Get remaining file data
+
+  // Open file for writing
+  std::ofstream outputFile(filename, std::ios::binary);
+  if (!outputFile.is_open()) {
+    std::cerr << "Error: Failed to create output file: " << filename
+              << std::endl;
+    return;
+  }
+
+  // Write file data to file
+  outputFile << fileData;
+
+  outputFile.close(); // Ensure file is closed
+  std::cout << "File received successfully: " << filename << std::endl;
+}
+
+void Server::handleClient(int clientSocket) {
+  this->receiveFile(clientSocket);
+  this->stop();
+}

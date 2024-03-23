@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include <vector>
 
 class Server {
@@ -10,9 +11,7 @@ public:
   bool stop();
 
   bool acceptConn();
-
-  // void receiveFile();
-  // void saveFile();
+  void receiveFile(int clientSocket);
 
 private:
   int m_port;
