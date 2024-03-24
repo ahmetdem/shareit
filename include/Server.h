@@ -3,8 +3,8 @@
 
 #include "Global.h"
 #include <iostream>
+#include <map>
 #include <string>
-#include <vector>
 
 class Server {
 public:
@@ -15,13 +15,25 @@ public:
   bool stop();
 
   bool acceptConn();
+
   void receiveFile(int clientSocket);
+  bool sendFileToClient(int clientSocket, const fs::path &filePath);
+
+  void addClient(const std::string &name, int clientSocket);
+  void removeClient(const std::string &name);
+  int getClientSocket(const std::string &name);
+
+  void getClients();
+  void sendClientsToClient(int clientSocket);
 
 private:
   int m_port;
   int m_serverSocket;
 
-  void handleClient(int clientSocket, char clientIp[], std::string name, ConnectionType connType);
+  std::map<std::string, int> connectedClients;
+
+  void handleClient(int clientSocket, const char clientIp[],
+                    const std::string &name, ConnectionType connType);
 };
 
 #endif // !SERVER_H

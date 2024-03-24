@@ -6,8 +6,6 @@
 #include <string>
 #include "./Global.h"
 
-namespace fs = std::filesystem;
-
 class Client {
 public:
   Client(const std::string &serverAddress, const std::string &name);
@@ -17,7 +15,12 @@ public:
   void closeConn();
   bool isConnected();
 
-  void sendFile(const fs::path &filePath);
+  void receiveClientsList();
+
+  fs::path sendFile(int clientSocket, const fs::path &filePath);
+
+  void sendFileToClient(int clientSocket, const fs::path& filePath);
+  bool receiveFileFromServer();
 
 private:
   std::string m_serverAddress;

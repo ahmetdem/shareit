@@ -7,6 +7,7 @@
 #include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <thread>
 #include <unistd.h>
 
 Server::Server(const int port) : m_port(port), m_serverSocket(-1) {}
@@ -89,8 +90,13 @@ bool Server::acceptConn() {
   char clientIp[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
 
+  // Add client to the map
+  addClient(clientName, clientSocket);
+
   // Handle client
   handleClient(clientSocket, clientIp, clientName, connectionType);
+
+  this->getClients();
 
   return true;
 }
@@ -103,9 +109,9 @@ void Server::receiveFile(int clientSocket) {
   std::string fileData;
   while (true) {
     ssize_t bytesRead = recv(clientSocket, buffer, bufferSize, 0);
+    std::cout << "Server: " << bytesRead << "\n";
 
     if (bytesRead == 0) {
-
       if (fileData.find("EOF") != std::string::npos) {
         fileData.erase(fileData.find("EOF"), 3); // Remove "EOF" marker
         break;
@@ -122,15 +128,35 @@ void Server::receiveFile(int clientSocket) {
     fileData += std::string(buffer, bytesRead);
   }
 
-  // Extract filename from the beginning of the file data
-  std::string filename = fileData.substr(0, fileData.find('\n'));
-  fileData = fileData.substr(filename.length() + 1); // Get remaining file data
+  // Parse client socket and filename from the received data
+  size_t pos = fileData.find('\n');
+  if (pos == std::string::npos) {
+    std::cerr << "Error: Invalid data format\n";
+    return;
+  }
 
-  // Open file for writing
+  std::string clientSocketStr = fileData.substr(0, pos);
+  [[maybe_unused]] int clientSocketOfReceiver = std::stoi(clientSocketStr);
+
+  fileData = fileData.substr(pos + 1); // Remove the client socket part
+
+  // Extract filename from the beginning of the file data
+  pos = fileData.find('\n');
+  if (pos == std::string::npos) {
+    std::cerr << "Error: Invalid data format\n";
+    return;
+  }
+
+  std::string filename = fileData.substr(0, pos);
+  fileData = fileData.substr(pos + 1); // Get remaining file data
+
   std::ofstream outputFile(filename, std::ios::binary);
   if (!outputFile.is_open()) {
     std::cerr << "Error: Failed to create output file: " << filename
               << std::endl;
+    // Additional debugging output
+    std::cerr << "Current working directory: "
+              << std::filesystem::current_path() << std::endl;
     return;
   }
 
@@ -139,26 +165,108 @@ void Server::receiveFile(int clientSocket) {
 
   outputFile.close(); // Ensure file is closed
   std::cout << "File received successfully: " << filename << std::endl;
+
+  // Call the function to send the file to the client with the given socket
+  this->sendFileToClient(clientSocketOfReceiver, filename);
 }
 
-void Server::handleClient(int clientSocket, char clientIp[],
-                          std::string clientName, ConnectionType connType) {
+bool Server::sendFileToClient(const int clientSocket,
+                              const fs::path &filePath) {
+  // Open the file
+  std::ifstream file(filePath, std::ios::binary);
+  if (!file) {
+    std::cerr << "Error: Failed to open file: " << filePath << std::endl;
+    return false;
+  }
 
+  // Read file contents into buffer
+  std::ostringstream buffer;
+  buffer << file.rdbuf();
+  std::string fileData = buffer.str();
+
+  // Construct message with filename, client socket, and file data
+  std::ostringstream message;
+  message << filePath.filename().string() << '\n';
+  message << fileData << EOF_MARKER;
+
+  // Send message to the client
+  ssize_t bytesSent =
+      send(clientSocket, message.str().c_str(), message.str().size(), 0);
+  if (bytesSent == -1) {
+    std::cerr << "Error: Failed to send file\n";
+    return false;
+  }
+
+  file.close();
+  std::cout << "File Sent Successfully\n";
+
+  return true;
+}
+
+void Server::addClient(const std::string &name, int clientSocket) {
+  connectedClients[name] = clientSocket;
+}
+
+void Server::removeClient(const std::string &name) {
+  connectedClients.erase(name);
+}
+
+int Server::getClientSocket(const std::string &name) {
+  auto it = connectedClients.find(name);
+  if (it != connectedClients.end()) {
+    return it->second; // Return the client socket
+  }
+  return -1; // Client not found
+}
+
+void Server::getClients() {
+  for (const auto &pair : connectedClients) {
+    std::cout << pair.first << "\n";
+  }
+}
+
+void Server::sendClientsToClient(const int clientSocket) {
+  // Serialize the list of client names and sockets into a string
+  std::ostringstream clientList;
+  for (const auto &pair : connectedClients) {
+    clientList << pair.first << ":" << pair.second << "\n";
+  }
+  std::string serializedClientList = clientList.str();
+
+  // Send the serialized list to the client
+  ssize_t bytesSent = send(clientSocket, serializedClientList.c_str(),
+                           serializedClientList.size(), 0);
+  if (bytesSent == -1) {
+    std::cerr << "Error: Failed to send client list to client\n";
+    return;
+  }
+}
+
+void Server::handleClient(int clientSocket, const char clientIp[],
+                          const std::string &clientName,
+                          ConnectionType connType) {
   std::cout << "Client '" << clientName
             << "' connected with connection type: " << connType
             << " with ip: " << clientIp << std::endl;
 
-  switch (connType) {
-  case ConnectionType::Normal:
-    break;
+  // Create a new thread to handle this client
+  std::thread clientThread([this, clientSocket, clientName, connType]() {
+    switch (connType) {
+    case ConnectionType::Normal:
+      // Handle normal connection
+      break;
 
-  case ConnectionType::FileTransfer:
-    this->receiveFile(clientSocket);
-    break;
+    case ConnectionType::FileTransfer:
+      // Handle file transfer
+      this->sendClientsToClient(clientSocket);
+      this->receiveFile(clientSocket);
+      break;
 
-  default:
-    std::cout << "Error: Unknown Operation." << std::endl;
-  }
+    default:
+      std::cout << "Error: Unknown Operation." << std::endl;
+    }
+  });
 
-  this->stop();
+  // Detach the thread so that it can run independently
+  clientThread.detach();
 }
