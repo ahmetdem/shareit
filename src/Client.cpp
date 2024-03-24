@@ -11,12 +11,13 @@
 
 const std::string EOF_MARKER = "##EOF##";
 
-Client::Client(const std::string &serverAdress)
-    : m_serverAddress(serverAdress), m_port(0), m_clientSocket(0) {}
+Client::Client(const std::string &serverAdress, const std::string &name)
+    : m_serverAddress(serverAdress), m_port(0), m_clientSocket(0),
+      m_uniqueName(name) {}
 
 Client::~Client() { this->closeConn(); }
 
-bool Client::setupConn(int port) {
+bool Client::setupConn(int port, ConnectionType type) {
   this->m_port = port;
 
   // Create socket
@@ -43,6 +44,16 @@ bool Client::setupConn(int port) {
     return false;
   }
 
+  // Send client name and connection type to server
+  std::string message = m_uniqueName + ":" + std::to_string(type);
+  ssize_t bytesSent = send(m_clientSocket, message.c_str(), message.size(), 0);
+  if (bytesSent < 0) {
+    std::cerr
+        << "Error: Failed to send client name and connection type to server."
+        << std::endl;
+    close(m_clientSocket);
+    return false;
+  }
   this->m_isConnected = true;
   return true;
 }

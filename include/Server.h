@@ -1,3 +1,7 @@
+#ifndef SERVER_H
+#define SERVER_H
+
+#include "Global.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -17,5 +21,7 @@ private:
   int m_port;
   int m_serverSocket;
 
-  void handleClient(int clientSocket);
+  void handleClient(int clientSocket, char clientIp[], std::string name, ConnectionType connType);
 };
+
+#endif // !SERVER_H

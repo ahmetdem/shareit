@@ -1,8 +1,9 @@
 #include "../include/Server.h"
+#include "../include/Global.h"
+#include <arpa/inet.h>
 #include <fstream>
 #include <iostream>
 #include <netinet/in.h>
-#include <sstream>
 #include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -53,19 +54,43 @@ bool Server::stop() {
 }
 
 bool Server::acceptConn() {
-  sockaddr_in clientAdrr;
-  socklen_t clientAdrrLen = sizeof(clientAdrr);
+  struct sockaddr_in clientAddr;
+  int clientSocket;
+  socklen_t clientAddrLen = sizeof(clientAddr);
 
-  int clientSocket =
-      accept(this->m_serverSocket, (sockaddr *)&clientAdrr, &clientAdrrLen);
-
-  if (clientSocket == -1) {
-    std::cerr << "Error: Accept failed\n";
+  // Accept connection
+  clientSocket =
+      accept(m_serverSocket, (struct sockaddr *)&clientAddr, &clientAddrLen);
+  if (clientSocket < 0) {
+    std::cerr << "Error: Failed to accept connection." << std::endl;
     return false;
   }
 
-  // Handle client connection in a separate thread or process
-  this->handleClient(clientSocket);
+  std::string clientName;
+  ConnectionType connectionType;
+  // Receive client name and connection type from client
+  char buffer[1024];
+  ssize_t bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+  if (bytesReceived < 0) {
+    std::cerr << "Error: Failed to receive client name and connection type."
+              << std::endl;
+  } else {
+    buffer[bytesReceived] = '\0';
+    std::string dataReceived(buffer);
+
+    // Parse client name and connection type from received data
+    size_t pos = dataReceived.find(':');
+    clientName = dataReceived.substr(0, pos);
+    std::string connectionTypeStr = dataReceived.substr(pos + 1);
+    connectionType = static_cast<ConnectionType>(std::stoi(connectionTypeStr));
+  }
+
+  // Get client IP address
+  char clientIp[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(clientAddr.sin_addr), clientIp, INET_ADDRSTRLEN);
+
+  // Handle client
+  handleClient(clientSocket, clientIp, clientName, connectionType);
 
   return true;
 }
@@ -116,7 +141,24 @@ void Server::receiveFile(int clientSocket) {
   std::cout << "File received successfully: " << filename << std::endl;
 }
 
-void Server::handleClient(int clientSocket) {
-  this->receiveFile(clientSocket);
+void Server::handleClient(int clientSocket, char clientIp[],
+                          std::string clientName, ConnectionType connType) {
+
+  std::cout << "Client '" << clientName
+            << "' connected with connection type: " << connType
+            << " with ip: " << clientIp << std::endl;
+
+  switch (connType) {
+  case ConnectionType::Normal:
+    break;
+
+  case ConnectionType::FileTransfer:
+    this->receiveFile(clientSocket);
+    break;
+
+  default:
+    std::cout << "Error: Unknown Operation." << std::endl;
+  }
+
   this->stop();
 }
