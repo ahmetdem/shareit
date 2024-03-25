@@ -166,6 +166,8 @@ void Server::receiveFile(int clientSocket) {
   outputFile.close(); // Ensure file is closed
   std::cout << "File received successfully: " << filename << std::endl;
 
+  this->removeClient(clientSocket);
+
   // Call the function to send the file to the client with the given socket
   this->sendFileToClient(clientSocketOfReceiver, filename);
 }
@@ -198,8 +200,9 @@ bool Server::sendFileToClient(const int clientSocket,
   }
 
   file.close();
-  std::cout << "File Sent Successfully\n";
+  std::cout << "File Sent Successfully to client: " << clientSocket << "\n";
 
+  this->removeClient(clientSocket);
   return true;
 }
 
@@ -207,8 +210,13 @@ void Server::addClient(const std::string &name, int clientSocket) {
   connectedClients[name] = clientSocket;
 }
 
-void Server::removeClient(const std::string &name) {
-  connectedClients.erase(name);
+void Server::removeClient(const int clientSocket) {
+  for (auto it = connectedClients.begin(); it != connectedClients.end(); ++it) {
+    if (it->second == clientSocket) {
+      connectedClients.erase(it);
+      return;
+    }
+  }
 }
 
 int Server::getClientSocket(const std::string &name) {

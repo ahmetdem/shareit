@@ -20,7 +20,7 @@ public:
   bool sendFileToClient(int clientSocket, const fs::path &filePath);
 
   void addClient(const std::string &name, int clientSocket);
-  void removeClient(const std::string &name);
+  void removeClient(const int clientSocket);
   int getClientSocket(const std::string &name);
 
   void getClients();
