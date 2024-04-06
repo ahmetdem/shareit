@@ -1,10 +1,10 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
+#include "./Global.h"
 #include <filesystem>
 #include <iostream>
 #include <string>
-#include "./Global.h"
 
 class Client {
 public:
@@ -19,7 +19,7 @@ public:
 
   fs::path sendFile(int clientSocket, const fs::path &filePath);
 
-  void sendFileToClient(int clientSocket, const fs::path& filePath);
+  void sendFileToClient(int clientSocket, const fs::path &filePath);
   bool receiveFileFromServer();
 
 private:
