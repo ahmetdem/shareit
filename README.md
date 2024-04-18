@@ -42,6 +42,6 @@ This will compile the project, then you can use the executable files in the `bin
 
 ![Shareit example](shareit.png)
 
-
+- **Note to Self:** Solve this error, i do not know why but after the complation of the file transfer the program sends another 0 bytes of data.
 
 
