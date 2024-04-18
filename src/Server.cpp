@@ -109,8 +109,6 @@ void Server::receiveFile(int clientSocket) {
   std::string fileData;
   while (true) {
     ssize_t bytesRead = recv(clientSocket, buffer, bufferSize, 0);
-    std::cout << "Server: " << bytesRead << "\n";
-
     if (bytesRead == 0) {
       if (fileData.find("EOF") != std::string::npos) {
         fileData.erase(fileData.find("EOF"), 3); // Remove "EOF" marker
